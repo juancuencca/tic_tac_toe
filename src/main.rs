@@ -5,29 +5,28 @@ const COLS: usize = 3;
 
 fn main() {
     let mut board = Board::new();
+    let mut turn = Player::A;
 
-    let mut game = GameConfig::new(Player::A);
-    println!("Welcome to Tic-Tac-Toe game");
-    println!("{} starts the game\n", game.turn);
+    println!("Welcome to Tic Tac Toe game");
+    println!("{} starts the game\n", turn);
     
     loop {
-        println!("Turn of {}", game.turn);
+        println!("Turn of {}", turn);
 
-        let fig = match game.turn {
+        let fig = match turn {
             Player::A => Figure::Cross,
             Player::B => Figure::Circle,
         };
 
-        print!("Enter the row number: ");
-        io::stdout().flush().unwrap();
+        let input = match read_input("row") {
+            Ok(buf) => buf,
+            Err(error) => {
+                println!("error: {error}");
+                continue;
+            }
+        };
 
-        let mut row = String::new();
-        if let Err(error) = io::stdin().read_line(&mut row) {
-            println!("error reading line: {}", error);
-            continue;
-        }
-
-        let row: usize = match row.trim().parse() {
+        let row: usize = match input.trim().parse() {
             Ok(row) => row,
             Err(error) => {
                 println!("Could not parse input to a valid usize value: {}", error);
@@ -35,35 +34,29 @@ fn main() {
             }
         };
         
-        print!("Enter the col number: ");
-        io::stdout().flush().unwrap();
+        let input = match read_input("col") {
+            Ok(buf) => buf,
+            Err(error) => {
+                println!("error: {error}");
+                continue;
+            }
+        };
 
-        let mut col = String::new();
-        if let Err(error) = io::stdin().read_line(&mut col) {
-            println!("error reading line: {}", error);
-            continue;
-        }
-
-        let col: usize = match col.trim().parse() {
+        let col: usize = match input.trim().parse() {
             Ok(col) => col,
             Err(error) => {
                 println!("Could not parse input to a valid usize value: {}", error);
                 continue;
             }
-        };
+        }; 
 
         if row > 2 || col > 2 {
             println!("row and col must be in the range [0-2]");
             continue;
         }
 
-        if !board.cell_is_empty(row, col) {
-            println!("This square is already marked");
-            continue;
-        }
-
-        let count_marked = match board.mark_cell(fig, row, col) {
-            Some(marked_cells) => marked_cells,
+        let marked_count = match board.mark_cell(fig, row, col) {
+            Some(marked) => marked,
             None => {
                 println!("Cell already marked");
                 continue;
@@ -73,29 +66,39 @@ fn main() {
         board.show_board();
 
         if board.complete_line() {
-            println!("{} won. Congratulations!", game.turn);
+            println!("{} won. Congratulations!", turn);
             break;
         }
 
-        if count_marked == ROWS * COLS {
+        if marked_count == ROWS * COLS {
             println!("The game ended in a draw");
             break;
         } 
 
-        game.change_turn();
+        turn = turn.change();
     }
+}
+
+fn read_input(axis: &str) -> io::Result<String> {
+    print!("Enter the {}: ", axis);
+    io::stdout().flush().unwrap();
+
+    let mut buf = String::new();
+    io::stdin().read_line(&mut buf)?;
+
+    Ok(buf)
 }
 
 struct Board {
     cells: Vec<Option<Figure>>,
-    marked_cells: usize,
+    marked_count: usize,
 }
 
 impl Board {
     fn new() -> Board {
         Board {
             cells: (0..ROWS * COLS).map(|_| None).collect(),
-            marked_cells: 0,
+            marked_count: 0,
         }
     }
 
@@ -107,14 +110,12 @@ impl Board {
         for i in 0..ROWS {
             let mut count_circle = 0;
             let mut count_cross = 0;
-
             for j in 0..COLS {
                 match self.get_cell(i, j) {
                     Some(Figure::Circle) => count_circle += 1,
                     Some(Figure::Cross) => count_cross += 1,
-                    None => return false,
-                };
-
+                    None => (),
+                }
                 if count_circle == 3 || count_cross == 3 {
                     return true;
                 }
@@ -124,14 +125,12 @@ impl Board {
         for j in 0..COLS {
             let mut count_circle = 0;
             let mut count_cross = 0;
-
             for i in 0..ROWS {
                 match self.get_cell(i, j) {
                     Some(Figure::Circle) => count_circle += 1,
                     Some(Figure::Cross) => count_cross += 1,
-                    None => return false,
+                    None => (),
                 };
-
                 if count_circle == 3 || count_cross == 3 {
                     return true;
                 }
@@ -140,14 +139,12 @@ impl Board {
         
         let mut count_circle = 0;
         let mut count_cross = 0;
-
         for i in 0..ROWS {
             match self.get_cell(i, i) {
                 Some(Figure::Circle) => count_circle += 1,
                 Some(Figure::Cross) => count_cross += 1,
-                None => return false,
+                None => (),
             };
-
             if count_circle == 3 || count_cross == 3 {
                 return true;
             } 
@@ -156,16 +153,13 @@ impl Board {
         let mut j = 3;
         let mut count_circle = 0;
         let mut count_cross = 0;
-
         for i in 0..ROWS {
             j -= 1;
-
             match self.get_cell(i, j) {
                 Some(Figure::Circle) => count_circle += 1,
                 Some(Figure::Cross) => count_cross += 1,
-                None => return false,
+                None => (),
             };
-
             if count_circle == 3 || count_cross == 3 {
                 return true;
             } 
@@ -181,9 +175,9 @@ impl Board {
 
         let position = self.get_position(row, col);
         self.cells[position] = Some(fig);
-        self.marked_cells += 1;
+        self.marked_count += 1;
 
-        Some(self.marked_cells)
+        Some(self.marked_count)
     }
 
     fn show_board(&self) {
@@ -229,26 +223,18 @@ impl fmt::Display for Figure {
     } 
 }
 
-struct GameConfig {
-    turn: Player,
-}
-
-impl GameConfig {
-    fn new(turn: Player) -> GameConfig {
-        GameConfig { turn }
-    }
-
-    fn change_turn(&mut self) {
-        match self.turn {
-            Player::A => self.turn = Player::B,
-            Player::B => self.turn = Player::A,
-        }
-    }
-}
-
 enum Player {
     A,
     B,
+}
+
+impl Player {
+    fn change(self) -> Player {
+        match self {
+            Player::A => Player::B,
+            Player::B => Player::A,
+        }
+    }
 }
 
 impl fmt::Display for Player {
